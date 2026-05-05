@@ -23,9 +23,12 @@ run:
 emulator:
 	uv run --python $(PYTHON) python ./alarm-button-run.py emulator --config $(CONFIG)
 
+# http://<host>:<port> из [api-server] в $(CONFIG); для 0.0.0.0 / :: хост в curl — 127.0.0.1
+SMOKE_URL_BASE = $(shell uv run --python $(PYTHON) python -c 'import tomllib; from pathlib import Path; p=Path("'"$(CONFIG)"'").resolve(); api=tomllib.load(p.open("rb"))["api-server"]; h=api["api-host"]; h="127.0.0.1" if h in ("0.0.0.0","::") else h; print("http://" + h + ":" + str(api["api-port"]))' 2>/dev/null)
+
 smoke:
-	curl -s http://127.0.0.1:8000/api/ping
-	curl -N --max-time 3 http://127.0.0.1:8000/api/alarm-button/v1/button/events || true
+	curl -s "$(SMOKE_URL_BASE)/api/ping"
+	curl -N --max-time 3 "$(SMOKE_URL_BASE)/api/alarm-button/v1/button/events" || true
 
 install:
 	bash ./alarm-button.sh install
