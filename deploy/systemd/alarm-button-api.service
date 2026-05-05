@@ -1,0 +1,19 @@
+[Unit]
+Description=Alarm Button FastAPI SSE service
+After=network-online.target alarm-button-gpio-setup.service
+Requires=alarm-button-gpio-setup.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+EnvironmentFile=/etc/default/alarm-button
+WorkingDirectory=${WORKDIR}
+ExecStart=/bin/bash -lc 'uv run --python 3.13 uvicorn app.main:app --host ${API_HOST} --port ${API_PORT}'
+Environment=ALARM_BUTTON_CONFIG=${CONFIG_PATH}
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
