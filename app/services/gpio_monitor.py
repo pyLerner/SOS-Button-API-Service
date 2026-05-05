@@ -18,11 +18,20 @@ LOGGER = logging.getLogger(__name__)
 class GpioMonitor:
     """Фоновый монитор уровня GPIO и генератор бизнес-событий кнопки."""
 
-    def __init__(self, gpio_cfg: GpioConfig, alarm_cfg: AlarmConfig, broker: SseBroker) -> None:
+    def __init__(
+        self,
+        gpio_cfg: GpioConfig,
+        alarm_cfg: AlarmConfig,
+        broker: SseBroker,
+        *,
+        event_source: str,
+    ) -> None:
         """Инициализирует монитор и вычисляет путь к источнику GPIO-уровня."""
         self._gpio_cfg = gpio_cfg
         self._alarm_cfg = alarm_cfg
         self._broker = broker
+        # Строка SSE/source из [api-server] source-string (как в ping).
+        self._event_source = event_source
         # Если задан value_path, используется эмулятор/кастомный источник.
         self._gpio_value_path = gpio_cfg.value_path or Path(f"/sys/class/gpio/gpio{gpio_cfg.pin_number}/value")
         self._stop_event = asyncio.Event()
@@ -80,14 +89,16 @@ class GpioMonitor:
                 pass
             self._task = None
 
-    async def _emit(self, state: str, source: str) -> None:
-        """Публикует итоговое событие кнопки в SSE-брокер."""
+    async def _emit(self, state: str) -> None:
+        """Публикует итоговое событие кнопки в SSE-брокер (`source` = конфиг api-server.source-string)."""
         now_utc = datetime.now(timezone.utc).isoformat(timespec="milliseconds")
-        await self._broker.publish(ButtonEvent(button_state=state, source=source, timestamp_utc=now_utc))
+        await self._broker.publish(
+            ButtonEvent(button_state=state, source=self._event_source, timestamp_utc=now_utc),
+        )
         self._last_emitted_state = state
         if state == "pressed":
             self._emitted_pressed_this_press = True
-        LOGGER.info("Сигнал сформирован: button-state=%s source=%s", state, source)
+        LOGGER.info("Сигнал сформирован: button-state=%s source=%s", state, self._event_source)
 
     async def _run(self) -> None:
         """Основной цикл обработки GPIO c применением всех защит из [alarm]."""
@@ -162,7 +173,7 @@ class GpioMonitor:
                     else:
                         self._press_start_ts = None
                         if self._last_emitted_state == "pressed":
-                            await self._emit("unpressed", "gpio")
+                            await self._emit("unpressed")
 
                 if self._stable_state == "pressed" and self._press_start_ts is not None:
                     hold_sec = now - self._press_start_ts
@@ -181,7 +192,7 @@ class GpioMonitor:
                     if hold_sec >= min_press_sec and now - self._last_pressed_emitted_ts >= repress_timeout_sec:
                         if self._last_emitted_state != "pressed":
                             self._last_pressed_emitted_ts = now
-                            await self._emit("pressed", "gpio")
+                            await self._emit("pressed")
 
                 await asyncio.sleep(0.02)
         except asyncio.CancelledError:

@@ -39,6 +39,7 @@ repress_timeout_sec = 2
 [api-server]
 api-host = "0.0.0.0"
 api-port = 8000
+source-string = "gpio-alarm-button"
 
 [log]
 log_dir = "./logs"
@@ -49,6 +50,7 @@ loglevel = "info"
 ```
 
 Пояснения:
+- `api-server.source-string` задаёт строку поля `"source"` в JSON `GET /api/ping` и в поле `data` каждого SSE-события с типом `alarm-button-state`.
 - `GPIO.pressed/unpressed` задают соответствие электрического уровня 0/1 и логического состояния.
 - `GPIO.value_path` (опционально) включает режим локального эмулятора.
 - `alarm.initial_state=true` отправляет текущее состояние сразу после SSE-подключения.

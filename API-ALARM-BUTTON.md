@@ -10,7 +10,7 @@ HTTP интерфейс сервиса доступен по адресу:
 
 - Формат запросов/ответов: JSON, UTF-8
 - Для JSON-запросов: `Content-Type: application/json`
-- Ключи JSON: kebab-case
+- Ключи JSON: по возможности kebab-case; исключение: поле `source` от `/api/ping` (строковый идентификатор из конфига)
 - Версионный префикс API: `/api/alarm-button/v1/`
 - Endpoint `ping` остается вне versioned префикса: `/api/ping`
 
@@ -23,13 +23,15 @@ HTTP интерфейс сервиса доступен по адресу:
 ```json
 {
   "running": "OK",
-  "timestamp-utc": "2026-03-29T12:34:56.789+00:00"
+  "timestamp-utc": "2026-03-29T12:34:56.789+00:00",
+  "source": "gpio-alarm-button"
 }
 ```
 
 Поля:
 - `running` (`string`) - всегда `"OK"` при успешной работе
 - `timestamp-utc` (`string`) - текущее UTC время в ISO 8601
+- `source` (`string`) - значение из `[api-server] source-string` в `alarm-button.toml`, идентификатор развёртывания/источника
 
 ## 2) Поток событий кнопки (SSE)
 
@@ -50,13 +52,13 @@ HTTP интерфейс сервиса доступен по адресу:
 Формат события:
 
 ```text
-event: button-state
-data: {"button-state":"pressed","source":"gpio","timestamp-utc":"2026-03-29T12:34:56.789+00:00"}
+event: alarm-button-state
+data: {"button-state":"pressed","source":"gpio-alarm-button","timestamp-utc":"2026-03-29T12:34:56.789+00:00"}
 ```
 
 Поля `data`:
 - `button-state` (`string`) - `pressed` или `unpressed`
-- `source` (`string`) - источник события (`gpio` или `initial`)
+- `source` (`string`) - всегда значение `[api-server] source-string` из `alarm-button.toml` (как в `GET /api/ping`)
 - `timestamp-utc` (`string`) - время формирования в UTC (ISO 8601)
 
 ## Ошибки

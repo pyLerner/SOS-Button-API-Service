@@ -38,10 +38,11 @@ class AlarmConfig:
 
 @dataclass(slots=True, frozen=True)
 class ApiServerConfig:
-    """Параметры bind-адреса API."""
+    """Параметры bind-адреса API; source_string попадает в JSON /api/ping как ключ source."""
 
     host: str
     port: int
+    source_string: str
 
 
 @dataclass(slots=True, frozen=True)
@@ -124,6 +125,7 @@ def load_config(config_path: str | None = None) -> AppConfig:
     api_server = ApiServerConfig(
         host=str(_require(api_data, "api-host", "api-server")),
         port=int(_require(api_data, "api-port", "api-server")),
+        source_string=str(_require(api_data, "source-string", "api-server")),
     )
 
     loglevel = str(_require(log_data, "loglevel", "log")).lower()

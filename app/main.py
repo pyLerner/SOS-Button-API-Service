@@ -43,7 +43,7 @@ def create_app() -> FastAPI:
     config = load_config(cfg_path)
     setup_logging(config.log)
     broker = SseBroker()
-    monitor = GpioMonitor(config.gpio, config.alarm, broker)
+    monitor = GpioMonitor(config.gpio, config.alarm, broker, event_source=config.api_server.source_string)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
@@ -64,7 +64,14 @@ def create_app() -> FastAPI:
     @app.get("/api/ping")
     async def ping() -> JSONResponse:
         """Health-check endpoint для проверки доступности сервиса."""
-        return JSONResponse({"running": "OK", "timestamp-utc": _utc_now_iso()})
+        cfg: AppConfig = app.state.config
+        return JSONResponse(
+            {
+                "running": "OK",
+                "timestamp-utc": _utc_now_iso(),
+                "source": cfg.api_server.source_string,
+            }
+        )
 
     @app.get("/api/alarm-button/v1/button/events")
     async def button_events(request: Request) -> StreamingResponse:
@@ -80,14 +87,18 @@ def create_app() -> FastAPI:
                 if app_config.alarm.initial_state:
                     initial = app_monitor.get_current_state()
                     if initial is not None:
-                        event = ButtonEvent(button_state=initial, source="initial", timestamp_utc=_utc_now_iso())
-                        yield _sse_line(event="button-state", data=event.to_json())
+                        event = ButtonEvent(
+                            button_state=initial,
+                            source=app_config.api_server.source_string,
+                            timestamp_utc=_utc_now_iso(),
+                        )
+                        yield _sse_line(event="alarm-button-state", data=event.to_json())
                 while True:
                     if await request.is_disconnected():
                         break
                     try:
                         event = await asyncio.wait_for(queue.get(), timeout=15.0)
-                        yield _sse_line(event="button-state", data=event.to_json())
+                        yield _sse_line(event="alarm-button-state", data=event.to_json())
                     except asyncio.TimeoutError:
                         # Регулярный keepalive нужен, чтобы прокси не закрывали idle-соединение.
                         yield _sse_line(comment="keepalive")
