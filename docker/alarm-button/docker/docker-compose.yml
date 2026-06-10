@@ -2,16 +2,33 @@ services:
   alarm-button-api:
     image: alarm-button-api:1
     container_name: alarm-button-api
-    restart: unless-stopped
+    restart: "no"
     network_mode: host
     environment:
       TZ: UTC
       ALARM_BUTTON_CONFIG: /app/etc/alarm-button.toml
       GPIO_NUM: "116"
-      GPIO_WAIT_SECONDS: "60"
+      GPIO_POLL_INTERVAL_MIN: "1"
+      GPIO_POLL_INTERVAL_MAX: "60"
+      GPIO_LOG_EVERY: "30"
     volumes:
       - /opt/alarm-button/etc:/app/etc:ro
       - /opt/alarm-button/logs:/app/logs:rw
       - /sys/class/gpio:/sys/class/gpio:ro
     user: "1000:1000"
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "2"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:7130/api/ping', timeout=2)\"",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 120s
     command: ["python", "alarm-button-run.py", "api", "--config", "/app/etc/alarm-button.toml"]

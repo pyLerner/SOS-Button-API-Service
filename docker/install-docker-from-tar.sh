@@ -7,6 +7,7 @@ set -euo pipefail
 COMPOSE_REL_PATH="${COMPOSE_REL_PATH:-docker/docker-compose.yml}"
 DEFAULT_CONTAINER_NAME="${CONTAINER_NAME:-alarm-button-api}"
 OPT_TARGET="/opt/alarm-button"
+SYSTEMD_UNIT="alarm-button.service"
 
 usage() {
   cat <<'EOF'
@@ -15,16 +16,17 @@ Usage: install-docker-from-tar.sh [options] [DEPLOY_DIR]
   DEPLOY_DIR — каталог с alarm-button/ и alarm-button*.tar.gz (по умолчанию: текущий).
 
 Options:
-  --copy-to-opt     Скопировать alarm-button в /opt/alarm-button (нужен root).
-  --no-up           Только docker load (и опционально --copy-to-opt), без compose up.
-  --setup-gpio      После --copy-to-opt: установить unit и запустить GPIO setup на хосте.
-  --tar FILE        Явный путь к .tar.gz; иначе ищется alarm-button*.tar.gz в DEPLOY_DIR.
-  -h, --help        Справка.
+  --copy-to-opt       Скопировать alarm-button в /opt/alarm-button (нужен root).
+  --no-up             Только docker load (и опционально --copy-to-opt), без запуска.
+  --enable-service    После --copy-to-opt: установить alarm-button.service и запустить через systemd.
+  --setup-gpio        То же, что --enable-service (устаревший alias).
+  --tar FILE          Явный путь к .tar.gz; иначе ищется alarm-button*.tar.gz в DEPLOY_DIR.
+  -h, --help          Справка.
 
 Переменные окружения:
-  TAR_FILE          То же, что --tar.
-  CONTAINER_NAME    Имя контейнера для остановки перед обновлением (по умолчанию: alarm-button-api).
-  COMPOSE_REL_PATH  Путь к compose от корня bundle (по умолчанию: docker/docker-compose.yml).
+  TAR_FILE            То же, что --tar.
+  CONTAINER_NAME      Имя контейнера для остановки перед обновлением (по умолчанию: alarm-button-api).
+  COMPOSE_REL_PATH    Путь к compose от корня bundle (по умолчанию: docker/docker-compose.yml).
 
 Несколько файлов alarm-button*.tar.gz: берётся самый новый по дате модификации.
 EOF
@@ -103,19 +105,33 @@ copy_project_to_opt() {
   chmod +x "${OPT_TARGET}/alarm-button-gpio-setup.sh" 2>/dev/null || true
 }
 
-setup_gpio_on_host() {
+enable_service_on_host() {
   local setup="${OPT_TARGET}/alarm-button-gpio-setup.sh"
   [[ -x "$setup" ]] || chmod +x "$setup"
-  log "Настройка GPIO на хосте (${setup})…"
+  log "Установка ${SYSTEMD_UNIT} и настройка GPIO на хосте…"
   "$setup"
-  systemctl enable --now alarm-button-gpio.service
+}
+
+start_stack() {
+  local project_root="$1"
+  local use_systemd="$2"
+
+  if (( use_systemd )); then
+    need_cmd systemctl
+    log "Запуск через systemctl restart ${SYSTEMD_UNIT} …"
+    systemctl restart "${SYSTEMD_UNIT}"
+    return
+  fi
+
+  log "Запуск stack в ${project_root} …"
+  ( cd "$project_root" && docker compose -f "$COMPOSE_REL_PATH" up -d --no-build )
 }
 
 main() {
   local deploy_dir=""
   local copy_to_opt=0
   local no_up=0
-  local setup_gpio=0
+  local enable_service=0
   local tar_explicit=""
 
   while [[ $# -gt 0 ]]; do
@@ -132,8 +148,8 @@ main() {
         no_up=1
         shift
         ;;
-      --setup-gpio)
-        setup_gpio=1
+      --enable-service | --setup-gpio)
+        enable_service=1
         shift
         ;;
       --tar)
@@ -168,27 +184,35 @@ main() {
   [[ -f "$tar_path" ]] || die "архив образа: $tar_path"
 
   local project_root="$src_project"
+  local use_systemd=0
   if (( copy_to_opt )); then
     if [[ "${EUID}" -ne 0 ]]; then
       die "для --copy-to-opt запустите от root: sudo $0 ..."
     fi
     copy_project_to_opt "$src_project"
     project_root="${OPT_TARGET}"
-    if (( setup_gpio )); then
-      setup_gpio_on_host
+    if (( enable_service )); then
+      enable_service_on_host
+      use_systemd=1
     else
-      log "Подсказка: для GPIO на хосте выполните:"
+      log "Подсказка: для production на хосте выполните:"
       log "  sudo ${OPT_TARGET}/alarm-button-gpio-setup.sh"
-      log "  sudo systemctl enable --now alarm-button-gpio.service"
-      log "или переустановите с флагом --setup-gpio"
+      log "  sudo systemctl enable --now ${SYSTEMD_UNIT}"
+      log "или переустановите с флагом --enable-service"
     fi
+  elif (( enable_service )); then
+    die "--enable-service требует --copy-to-opt"
   fi
 
   local compose_file="${project_root}/${COMPOSE_REL_PATH}"
   [[ -f "$compose_file" ]] || die "не найден compose: $compose_file (COMPOSE_REL_PATH=${COMPOSE_REL_PATH})"
 
-  compose_down_project "$project_root"
-  stop_existing_container "$DEFAULT_CONTAINER_NAME"
+  if (( use_systemd )); then
+    systemctl stop "${SYSTEMD_UNIT}" 2>/dev/null || compose_down_project "$project_root"
+  else
+    compose_down_project "$project_root"
+    stop_existing_container "$DEFAULT_CONTAINER_NAME"
+  fi
 
   log "Загрузка образа из ${tar_path} …"
   gunzip -c "$tar_path" | docker load
@@ -198,8 +222,7 @@ main() {
     exit 0
   fi
 
-  log "Запуск stack в ${project_root} …"
-  ( cd "$project_root" && docker compose -f "$COMPOSE_REL_PATH" up -d --no-build )
+  start_stack "$project_root" "$use_systemd"
   log "Готово."
 }
 

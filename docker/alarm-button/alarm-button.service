@@ -1,0 +1,18 @@
+[Unit]
+Description=Alarm Button API (GPIO setup + Docker)
+After=local-fs.target docker.service
+Wants=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=/opt/alarm-button
+EnvironmentFile=-/opt/alarm-button/etc/alarm-button-gpio.env
+ExecStartPre=/opt/alarm-button/alarm-button-gpio-setup.sh --no-install-unit
+ExecStart=/usr/bin/docker compose -f /opt/alarm-button/docker/docker-compose.yml up -d --no-build --remove-orphans
+ExecStop=/usr/bin/docker compose -f /opt/alarm-button/docker/docker-compose.yml down --remove-orphans
+ExecStopPost=-/usr/bin/docker rm -f alarm-button-api
+
+[Install]
+WantedBy=multi-user.target

@@ -20,7 +20,8 @@ usage() {
   cat <<'EOF'
 Usage: alarm-button-gpio-setup.sh [--no-install-unit]
 
-  --no-install-unit   Не копировать/включать systemd-юнит (для вызова из unit).
+  --no-install-unit   Только настройка GPIO (для вызова из alarm-button.service).
+  По умолчанию также устанавливает и включает alarm-button.service.
 EOF
 }
 
@@ -71,15 +72,20 @@ set_value_permissions() {
 }
 
 install_systemd_unit() {
-  local unit_src="${SCRIPT_DIR}/alarm-button-gpio.service"
-  local unit_dst="/etc/systemd/system/alarm-button-gpio.service"
+  local unit_src="${SCRIPT_DIR}/alarm-button.service"
+  local unit_dst="/etc/systemd/system/alarm-button.service"
+  local legacy_unit="/etc/systemd/system/alarm-button-gpio.service"
   [[ -f "$unit_src" ]] || die "не найден unit: ${unit_src}"
   if [[ $(id -u) -ne 0 ]]; then
     die "для установки unit нужен root"
   fi
+  if [[ -f "$legacy_unit" ]]; then
+    systemctl disable alarm-button-gpio.service 2>/dev/null || true
+    rm -f "$legacy_unit"
+  fi
   cp "$unit_src" "$unit_dst"
   systemctl daemon-reload
-  systemctl enable alarm-button-gpio.service
+  systemctl enable alarm-button.service
 }
 
 if [[ ! -d "$GPIO_PATH" ]]; then
