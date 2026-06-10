@@ -1,0 +1,21 @@
+services:
+  alarm-button-api:
+    build:
+      context: ..
+      dockerfile: docker/alarm-button/docker/Dockerfile
+      network: host
+    image: alarm-button-api:1
+    container_name: alarm-button-api
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      TZ: UTC
+      ALARM_BUTTON_CONFIG: /app/etc/alarm-button.toml
+      GPIO_NUM: "116"
+      GPIO_WAIT_SECONDS: "60"
+    volumes:
+      - /opt/alarm-button/etc:/app/etc:ro
+      - /opt/alarm-button/logs:/app/logs:rw
+      - /sys/class/gpio:/sys/class/gpio:ro
+    user: "1000:1000"
+    command: ["python", "alarm-button-run.py", "api", "--config", "/app/etc/alarm-button.toml"]

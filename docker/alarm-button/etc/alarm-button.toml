@@ -1,0 +1,22 @@
+[GPIO]
+pin_number = 116
+pressed = 0
+unpressed = 1
+
+[alarm]
+initial_state = true
+debounce_ms = 50
+min_press_ms = 150
+repress_timeout_sec = 10
+
+[api-server]
+api-host = "0.0.0.0"
+api-port = 7130
+source-string = "gpio-alarm-button"
+
+[log]
+log_dir = "/app/logs"
+log_name = "alarm-button.log"
+max_log_files = 5
+max_log_size = "10M"
+loglevel = "info"

@@ -1,0 +1,13 @@
+[Unit]
+Description=Alarm Button GPIO setup
+After=local-fs.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=-/opt/alarm-button/etc/alarm-button-gpio.env
+WorkingDirectory=/opt/alarm-button
+ExecStart=/opt/alarm-button/alarm-button-gpio-setup.sh --no-install-unit
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
