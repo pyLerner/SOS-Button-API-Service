@@ -1,0 +1,6 @@
+[submodule "QR-reader-API"]
+	path = QR-reader-API
+	url = https://github.com/pyLerner/QR-reader-API.gi
+[submodule "SSH-Auditor"]
+	path = SSH-Auditor
+	url = git@github.com:pyLerner/SSH-Auditor.git
